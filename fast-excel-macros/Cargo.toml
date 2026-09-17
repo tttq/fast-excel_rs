@@ -1,0 +1,14 @@
+[package]
+name = "excel-macros"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.81"
+description = "excel crate 的派生宏：#[derive(ExcelRow)] 声明式列映射（对标 EasyExcel 注解）"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"
