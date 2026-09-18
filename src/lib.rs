@@ -65,6 +65,7 @@ pub mod header;
 pub mod import;
 pub mod model;
 pub mod read;
+pub mod task;
 pub mod value;
 pub mod write;
 
@@ -89,6 +90,11 @@ pub use read::{
     ZipSource, extract_all_images, extract_embedded_images, extract_images_of_sheet,
     extract_wps_cellimages, parse_dispimg_id,
 };
+pub use task::{
+    ExportTaskContext, ExportTaskEntry, ExportTaskFn, ExportTaskFuture, ExportTaskKind,
+    ExportTaskOutput, XLSX_MIME, export_task_entry, export_task_registered, registered_export_tasks,
+    run_export_task, run_file_task, run_rows_task,
+};
 pub use value::{Cell, CellValue, FromCell, IntoCell};
 pub use write::{
     ExcelWriter, ReferenceSheet, SheetOptions, SheetWriter, TemplateSpec, WriteOptions,
@@ -104,84 +110,87 @@ pub use excel_macros::ExcelExecutor;
 /// 派生宏生成的 `inventory::submit!` 通过此路径引用；通常无需直接使用
 #[doc(hidden)]
 pub use ::inventory;
-// 导出执行器自动注册宏（追加内容，由临时脚本拼接到 fast-excel_rs/src/lib.rs 末尾）
-// 业务端不再手写执行器 / install() / inventory::submit! 样板，一个宏调用即自动注册。
-
-/// 自动注册导出中心「行导出」执行器（配合通用导出注册表使用，业务侧**不再手写执行器、
-/// `install()` 与 `inventory::submit!` 样板**）。
+/// 注册一个异步导出任务（唯一宏：行导出 / 文件导出都用它）。
 ///
-/// 宏展开生成一个 `inventory::submit!` 安装器：程序启动期（init_array）自动登记，
-/// 首次使用导出中心时由 `common::export_task` 惰性遍历完成注册（幂等）。
+/// 展开后直接向 `inventory` 提交任务定义，链接期即完成注册：
+/// **没有执行器结构体、没有 `install()`、不需要在 `main.rs` 聚合**。
+/// 导出中心按 `task_type` 查到函数后直接调用。
 ///
-/// # 参数
-/// - `task_type`: 导出中心任务类型（与前端 `taskType` 一致，如 `"factory"`）
-/// - `sheet_name`: 工作表名（如 `"工厂数据"`）
-/// - `headers`: 表头 `&'static [&'static str]`
-/// - `provider`: 行数据提供函数 `async fn(ExportTaskContext) -> Result<Vec<Vec<String>>, AppError>`
-///
-/// # 依赖
-/// 调用方 crate 需依赖 `common`（注册表路径 `::common::export_task`）与 `inventory`
-/// （`::inventory::submit!`）。
-///
-/// # 示例
+/// # 形态一：行数据导出（业务只查数据，引擎写 xlsx）
 /// ```ignore
-/// excel::export_executor! {
+/// excel::export_task! {
 ///     task_type = "factory",
 ///     sheet_name = "工厂数据",
 ///     headers = FACTORY_HEADERS,
-///     provider = factory_export_rows,
+///     rows = factory_export_rows, // async fn(ExportTaskContext) -> Result<Vec<Vec<String>>, E>
 /// }
 /// ```
+///
+/// # 形态二：文件导出（业务自带流式生成，如带图 xlsx）
+/// ```ignore
+/// excel::export_task! {
+///     task_type = "product",
+///     mime = excel::XLSX_MIME,
+///     file = product_export_file, // async fn(ExportTaskContext) -> Result<(i64, String), E>
+/// }
+/// ```
+///
+/// `rows` / `file` 也接受非捕获闭包（如 `|ctx| rows_for(kind, ctx)`），
+/// 方便一个模块用同一份逻辑注册多张表。
 #[macro_export]
-macro_rules! export_executor {
+macro_rules! export_task {
     (
         task_type = $task:expr,
         sheet_name = $sheet:expr,
         headers = $headers:expr,
-        provider = $provider:path
+        rows = $rows:expr
         $(,)?
     ) => {
-        ::inventory::submit! {
-            ::common::export_task::ExportExecutorInstaller(
-                (|| {
-                    ::common::export_task::register_rows_executor(
-                        $task,
-                        $sheet,
-                        $headers,
-                        |ctx| $provider(ctx),
-                    );
-                }) as fn()
-            )
-        }
-    };
-}
+        const _: () = {
+            fn __excel_export_task(
+                ctx: $crate::ExportTaskContext,
+            ) -> $crate::ExportTaskFuture {
+                ::std::boxed::Box::pin($crate::run_rows_task(
+                    ctx,
+                    $task,
+                    $sheet,
+                    $headers,
+                    $rows,
+                ))
+            }
 
-/// 自动注册导出中心「文件导出」执行器：业务自带文件生成（如带图流式 xlsx），
-/// 展开同样只产生 `inventory::submit!` 安装器（见 [`export_executor!`]）。
-///
-/// # 参数
-/// - `task_type`: 导出中心任务类型（如 `"product"`）
-/// - `mime`: 导出文件 MIME（`&'static str`）
-/// - `provider`: 文件生成函数 `async fn(ExportTaskContext) -> Result<(i64, String), AppError>`
-///   （返回 `(数据行数, 生成的文件名)`，文件须写入 `ctx.out_dir`）
-#[macro_export]
-macro_rules! export_file_executor {
+            $crate::inventory::submit! {
+                $crate::ExportTaskEntry {
+                    task_type: $task,
+                    kind: $crate::ExportTaskKind::Rows {
+                        sheet_name: $sheet,
+                        headers: $headers,
+                    },
+                    run: __excel_export_task,
+                }
+            }
+        };
+    };
     (
         task_type = $task:expr,
         mime = $mime:expr,
-        provider = $provider:path
+        file = $file:expr
         $(,)?
     ) => {
-        ::inventory::submit! {
-            ::common::export_task::ExportExecutorInstaller(
-                (|| {
-                    ::common::export_task::register_file_executor(
-                        $task,
-                        $mime,
-                        |ctx| $provider(ctx),
-                    );
-                }) as fn()
-            )
-        }
+        const _: () = {
+            fn __excel_export_task(
+                ctx: $crate::ExportTaskContext,
+            ) -> $crate::ExportTaskFuture {
+                ::std::boxed::Box::pin($crate::run_file_task(ctx, $mime, $file))
+            }
+
+            $crate::inventory::submit! {
+                $crate::ExportTaskEntry {
+                    task_type: $task,
+                    kind: $crate::ExportTaskKind::File { mime: $mime },
+                    run: __excel_export_task,
+                }
+            }
+        };
     };
 }

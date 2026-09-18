@@ -1,0 +1,6 @@
+target
+**/target
+.git
+.idea
+.trae
+*.md

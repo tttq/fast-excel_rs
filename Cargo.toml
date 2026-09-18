@@ -1,6 +1,6 @@
 [package]
 name = "excel"
-version = "0.2.0"
+version = "0.3"
 edition = "2021"
 rust-version = "1.81"
 description = "通用 Excel 导入导出工具：流式读写（百万级）、动态表头适配、多 sheet、单元格图片、批量落库（纯 Rust，对标 EasyExcel）"
