@@ -189,13 +189,13 @@ fn expand(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
         };
 
         column_defs.push(quote! {{
-            let mut __col = ::excel::ColumnDef::new(#header_lit);
+            let mut __col = ::fast_excel::ColumnDef::new(#header_lit);
             let __aliases: ::std::vec::Vec<::std::string::String> =
                 vec![#(#aliases.to_string()),*];
             if !__aliases.is_empty() {
                 __col = __col.aliases(__aliases);
             }
-            __col = __col.kind(::excel::ColumnKind::#kind_ident);
+            __col = __col.kind(::fast_excel::ColumnKind::#kind_ident);
             #required_stmt
             #text_stmt
             #image_stmt
@@ -219,16 +219,16 @@ fn expand(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
             quote! {
                 let __parsed = match row.images_of(__header).first() {
                     ::core::option::Option::Some(__img) => {
-                        let __cell = ::excel::Cell {
+                        let __cell = ::fast_excel::Cell {
                             row: row.row_index,
                             col: __img.column,
-                            value: ::excel::CellValue::Image(__img.image()),
+                            value: ::fast_excel::CellValue::Image(__img.image()),
                             style: 0,
                         };
-                        <#ty as ::excel::FromCell>::from_cell(&__cell)
+                        <#ty as ::fast_excel::FromCell>::from_cell(&__cell)
                     }
                     ::core::option::Option::None => {
-                        <#ty as ::excel::FromCell>::from_missing_column()
+                        <#ty as ::fast_excel::FromCell>::from_missing_column()
                     }
                 };
             }
@@ -236,10 +236,10 @@ fn expand(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
             quote! {
                 let __parsed = match row.cell_of(__header) {
                     ::core::option::Option::Some(__cell) => {
-                        <#ty as ::excel::FromCell>::from_cell(__cell)
+                        <#ty as ::fast_excel::FromCell>::from_cell(__cell)
                     }
                     ::core::option::Option::None => {
-                        <#ty as ::excel::FromCell>::from_missing_column()
+                        <#ty as ::fast_excel::FromCell>::from_missing_column()
                     }
                 };
             }
@@ -256,7 +256,7 @@ fn expand(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                             .index_of(__header)
                             .and_then(|__col| row.header.file_headers.get(__col as usize).cloned())
                             .unwrap_or_default();
-                        __errors.push(::excel::ColumnError {
+                        __errors.push(::fast_excel::ColumnError {
                             column: __header.to_string(),
                             file_header: __file_header,
                             message: __message,
@@ -272,13 +272,13 @@ fn expand(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
 
         // ── to_row() ──
         to_row_exprs.push(quote! {
-            ::excel::IntoCell::into_cell(&self.#ident)
+            ::fast_excel::IntoCell::into_cell(&self.#ident)
         });
     }
 
     let dynamic_stmt = if has_dynamic {
         quote! {
-            let __dynamic_values: ::std::vec::Vec<(::std::string::String, ::excel::CellValue)> = row
+            let __dynamic_values: ::std::vec::Vec<(::std::string::String, ::fast_excel::CellValue)> = row
                 .header
                 .file_headers
                 .iter()
@@ -296,7 +296,7 @@ fn expand(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                         __header.clone(),
                         row.cell_at(__i as u16)
                             .map(|__cell| __cell.value.clone())
-                            .unwrap_or(::excel::CellValue::Empty),
+                            .unwrap_or(::fast_excel::CellValue::Empty),
                     )
                 })
                 .collect();
@@ -316,15 +316,15 @@ fn expand(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
 
     Ok(quote! {
         #[automatically_derived]
-        impl ::excel::ExcelRow for #name {
-            fn columns() -> ::std::vec::Vec<::excel::ColumnDef> {
+        impl ::fast_excel::ExcelRow for #name {
+            fn columns() -> ::std::vec::Vec<::fast_excel::ColumnDef> {
                 vec![#(#column_defs),*]
             }
 
             fn from_row(
-                row: &::excel::RowData<'_>,
-            ) -> ::core::result::Result<Self, ::std::vec::Vec<::excel::ColumnError>> {
-                let mut __errors: ::std::vec::Vec<::excel::ColumnError> = ::std::vec::Vec::new();
+                row: &::fast_excel::RowData<'_>,
+            ) -> ::core::result::Result<Self, ::std::vec::Vec<::fast_excel::ColumnError>> {
+                let mut __errors: ::std::vec::Vec<::fast_excel::ColumnError> = ::std::vec::Vec::new();
                 #dynamic_stmt
                 #(#extract_stmts)*
                 if !__errors.is_empty() {
@@ -335,7 +335,7 @@ fn expand(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                 })
             }
 
-            fn to_row(&self) -> ::std::vec::Vec<::excel::CellValue> {
+            fn to_row(&self) -> ::std::vec::Vec<::fast_excel::CellValue> {
                 vec![#(#to_row_exprs),*]
             }
 
@@ -493,7 +493,7 @@ fn base_type_name(ty: &Type) -> Option<String> {
 /// 在业务模型上（通常与 `#[derive(ExcelRow)]` 组合使用）挂一个注册名即可：
 ///
 /// ```ignore
-/// use excel::{ExcelExecutor, ExcelRow};
+/// use fast_excel::{ExcelExecutor, ExcelRow};
 /// use serde::Serialize;
 ///
 /// #[derive(ExcelRow, ExcelExecutor, Serialize)]
@@ -504,9 +504,9 @@ fn base_type_name(ty: &Type) -> Option<String> {
 /// }
 ///
 /// // 业务端零配置直接调用（自动创建 runner / 注册进全局表）：
-/// let exec = excel::executor_for::<ProductRow>();
+/// let exec = fast_excel::executor_for::<ProductRow>();
 /// // 或按注册名字符串调度（Web 层路由用）：
-/// let erased = excel::executor_by_name("product");
+/// let erased = fast_excel::executor_by_name("product");
 /// ```
 ///
 /// 需要实现 `serde::Serialize`：注册进全局表后要能按名返回 JSON 预览。
@@ -567,28 +567,28 @@ fn expand_executor(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream>
 
     Ok(quote! {
         #[automatically_derived]
-        impl ::excel::ExcelExecutor for #ident {
+        impl ::fast_excel::ExcelExecutor for #ident {
             const EXECUTOR_NAME: &'static str = #register;
         }
 
         #[automatically_derived]
         impl #ident {
             /// 本模型的通用执行器：预览 / 导入 / 导出 / 模板一条龙，业务端无需手拼 runner
-            pub fn executor() -> ::excel::Executor<Self> {
-                ::excel::executor_for::<Self>()
+            pub fn executor() -> ::fast_excel::Executor<Self> {
+                ::fast_excel::executor_for::<Self>()
             }
         }
 
         #[doc(hidden)]
         #[allow(non_snake_case)]
-        fn #make_fn() -> ::std::boxed::Box<dyn ::excel::ErasedExecutor> {
-            ::std::boxed::Box::new(::excel::executor_for::<#ident>())
+        fn #make_fn() -> ::std::boxed::Box<dyn ::fast_excel::ErasedExecutor> {
+            ::std::boxed::Box::new(::fast_excel::executor_for::<#ident>())
         }
 
         #[allow(non_upper_case_globals, unused)]
         const _: () = {
-            ::excel::inventory::submit! {
-                ::excel::ExecutorEntry {
+            ::fast_excel::inventory::submit! {
+                ::fast_excel::ExecutorEntry {
                     name: #register,
                     type_name: ::core::stringify!(#ident),
                     make: #make_fn,

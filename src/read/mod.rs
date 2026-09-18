@@ -1,8 +1,8 @@
 //! 读侧：流式 xlsx 读取（动态表头 / 多 sheet / 单元格图片）
 //!
 //! ```no_run
-//! use excel::read::{ExcelReader, ReadOptions, SheetSelector};
-//! # fn main() -> Result<(), excel::ExcelError> {
+//! use fast_excel::read::{ExcelReader, ReadOptions, SheetSelector};
+//! # fn main() -> Result<(), fast_excel::ExcelError> {
 //! let reader = ExcelReader::open("products.xlsx")?;
 //! println!("工作表：{:?}", reader.sheet_names());
 //! let options = ReadOptions::new().header_row(0).with_images();

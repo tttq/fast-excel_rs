@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use base64::Engine;
 use chrono::NaiveDate;
-use excel::{
+use fast_excel::{
     CellImage, CellValue, ExcelReader, ExcelRow, ExcelWriter, ExportRunner, Page, ReadOptions,
     ReferenceSheet, SheetOptions, SheetSelector, TemplateSpec, ZipSource, build_template,
 };
@@ -80,8 +80,8 @@ fn test_derive_columns() {
     assert_eq!(cols[0].header, "工厂名称");
     assert!(cols[0].required);
     assert_eq!(cols[0].aliases, vec!["工厂", "厂名"]);
-    assert_eq!(cols[2].kind, excel::ColumnKind::Decimal);
-    assert_eq!(cols[5].kind, excel::ColumnKind::Image);
+    assert_eq!(cols[2].kind, fast_excel::ColumnKind::Decimal);
+    assert_eq!(cols[5].kind, fast_excel::ColumnKind::Image);
     assert!(cols[5].image);
     assert_eq!(Product::sheet_name(), Some("产品"));
 }
@@ -250,7 +250,7 @@ fn test_dynamic_row_collects_everything() {
         .stream(SheetSelector::First, &[], ReadOptions::new())
         .unwrap();
     let row = stream.next_row().unwrap().unwrap();
-    let dynamic = excel::DynamicRow::from_row(&row).unwrap();
+    let dynamic = fast_excel::DynamicRow::from_row(&row).unwrap();
     assert_eq!(dynamic.text("甲"), "1");
     assert_eq!(dynamic.text("乙"), "2");
     assert_eq!(dynamic.text("丙"), "TRUE");
@@ -417,7 +417,7 @@ fn test_export_sheets_in_memory() {
 }
 
 /// 百万行压力测试：验证“边写边落盘 + SAX 逐行读”不依赖行数。
-/// 默认 `#[ignore]`，手动跑：`cargo test -p excel --test roundtrip -- --ignored`
+/// 默认 `#[ignore]`，手动跑：`cargo test -p fast-excel --test roundtrip -- --ignored`
 #[test]
 #[ignore = "million-row stress test; run manually with --ignored"]
 fn stress_one_million_rows_streaming() {

@@ -1,9 +1,11 @@
 [package]
-name = "excel-macros"
+name = "fast-excel-macros"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.81"
-description = "excel crate 的派生宏：#[derive(ExcelRow)] 声明式列映射（对标 EasyExcel 注解）"
+description = "fast-excel crate 的派生宏：#[derive(ExcelRow)] 声明式列映射（对标 EasyExcel 注解）"
+license = "MIT"
+repository = "https://github.com/tttq/fast-excel_rs"
 
 [lib]
 proc-macro = true

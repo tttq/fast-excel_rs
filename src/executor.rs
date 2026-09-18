@@ -6,7 +6,7 @@
 //!
 //! ```no_run
 //! use serde::Serialize;
-//! use excel::{ExcelExecutor, ExcelRow, ZipSource};
+//! use fast_excel::{ExcelExecutor, ExcelRow, ZipSource};
 //!
 //! #[derive(ExcelRow, ExcelExecutor, Serialize)]
 //! #[excel(sheet = "产品导入", register = "product")]
@@ -15,17 +15,17 @@
 //!     name: String,
 //! }
 //!
-//! # async fn demo(sink: std::sync::Arc<dyn excel::BatchSink<ProductRow>>) -> Result<(), excel::ExcelError> {
+//! # async fn demo(sink: std::sync::Arc<dyn fast_excel::BatchSink<ProductRow>>) -> Result<(), fast_excel::ExcelError> {
 //! let source = ZipSource::open("products.xlsx")?;
 //!
 //! // ① 按类型调用（编译期保证类型安全）
-//! let exec = excel::executor_for::<ProductRow>();
+//! let exec = fast_excel::executor_for::<ProductRow>();
 //! let preview = exec.preview(source.clone(), 200)?;
 //! let report = exec.commit(source.clone(), sink).await?;
 //! let bytes = exec.export_bytes(&products())?;
 //!
 //! // ② 按注册名字符串调度（Web 层按请求参数路由）
-//! let erased = excel::executor_by_name("product").expect("已注册");
+//! let erased = fast_excel::executor_by_name("product").expect("已注册");
 //! let json = erased.preview(source, 200)?;
 //! # Ok(()) }
 //! # fn products() -> Vec<ProductRow> { vec![] }

@@ -1,6 +1,6 @@
 //! 验证「一个宏注册异步导出任务」的两种形态。
 
-use excel::{ExportTaskContext, export_task_registered, run_export_task};
+use fast_excel::{ExportTaskContext, export_task_registered, run_export_task};
 
 const HEADERS: &[&str] = &["名称", "数量"];
 
@@ -11,7 +11,7 @@ async fn unit_rows(_ctx: ExportTaskContext) -> Result<Vec<Vec<String>>, String> 
     ])
 }
 
-excel::export_task! {
+fast_excel::export_task! {
     task_type = "unit-rows",
     sheet_name = "测试数据",
     headers = HEADERS,
@@ -25,7 +25,7 @@ async fn unit_file(ctx: ExportTaskContext) -> Result<(i64, String), String> {
     Ok((1, name))
 }
 
-excel::export_task! {
+fast_excel::export_task! {
     task_type = "unit-file",
     mime = "text/csv",
     file = unit_file,

@@ -24,7 +24,7 @@
 //!
 //! ```no_run
 //! use std::sync::Arc;
-//! use excel::{BatchSink, ExcelError, ExcelReader, ExcelRow, ImportRunner, SheetSelector, ZipSource};
+//! use fast_excel::{BatchSink, ExcelError, ExcelReader, ExcelRow, ImportRunner, SheetSelector, ZipSource};
 //!
 //! #[derive(ExcelRow, Debug)]
 //! #[excel(sheet = "产品导入")]
@@ -54,8 +54,8 @@
 //! `Entity::insert_many_with_fill(models, &tx)` 即可同时拿到主键生成、审计字段
 //! 自动填充与租户注入。
 
-// 让派生宏在 crate 内部（单元测试 / 文档测试）也能用 `::excel::` 路径
-extern crate self as excel;
+// 让派生宏在 crate 内部（单元测试 / 文档测试）也能用 `::fast_excel::` 路径
+extern crate self as fast_excel;
 
 pub mod column;
 pub mod error;
@@ -102,10 +102,10 @@ pub use write::{
 };
 
 /// `#[derive(ExcelRow)]` 派生宏（与 [`ExcelRow`] trait 同名，不同命名空间）
-pub use excel_macros::ExcelRow;
+pub use fast_excel_macros::ExcelRow;
 
 /// `#[derive(ExcelExecutor)]` 派生宏：注册执行器工厂（与 [`ExcelExecutor`] trait 同名）
-pub use excel_macros::ExcelExecutor;
+pub use fast_excel_macros::ExcelExecutor;
 
 /// 派生宏生成的 `inventory::submit!` 通过此路径引用；通常无需直接使用
 #[doc(hidden)]
@@ -118,7 +118,7 @@ pub use ::inventory;
 ///
 /// # 形态一：行数据导出（业务只查数据，引擎写 xlsx）
 /// ```ignore
-/// excel::export_task! {
+/// fast_excel::export_task! {
 ///     task_type = "factory",
 ///     sheet_name = "工厂数据",
 ///     headers = FACTORY_HEADERS,
@@ -128,9 +128,9 @@ pub use ::inventory;
 ///
 /// # 形态二：文件导出（业务自带流式生成，如带图 xlsx）
 /// ```ignore
-/// excel::export_task! {
+/// fast_excel::export_task! {
 ///     task_type = "product",
-///     mime = excel::XLSX_MIME,
+///     mime = fast_excel::XLSX_MIME,
 ///     file = product_export_file, // async fn(ExportTaskContext) -> Result<(i64, String), E>
 /// }
 /// ```

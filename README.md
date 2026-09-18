@@ -28,7 +28,7 @@
 ### 1）声明行模型
 
 ```rust
-use excel::{CellImage, ExcelRow};
+use fast_excel::{CellImage, ExcelRow};
 
 #[derive(ExcelRow, Debug, Clone)]
 #[excel(sheet = "产品导入")]
@@ -53,7 +53,7 @@ struct ProductRow {
 
 ```rust
 use std::sync::Arc;
-use excel::{BatchSink, ExcelError, ImportRunner, SheetSelector, ZipSource};
+use fast_excel::{BatchSink, ExcelError, ImportRunner, SheetSelector, ZipSource};
 
 // 每批一个事务，业务侧自己决定事务边界
 struct ProductSink { /* db: DbConn, ... */ }
@@ -89,9 +89,9 @@ let report = ImportRunner::new()
 ### 3）导出：游标分页 + 流式写
 
 ```rust
-use excel::{ExportRunner, Page, SheetOptions};
+use fast_excel::{ExportRunner, Page, SheetOptions};
 
-# async fn demo(db: sea_orm::DatabaseConnection) -> Result<(), excel::ExcelError> {
+# async fn demo(db: sea_orm::DatabaseConnection) -> Result<(), fast_excel::ExcelError> {
 let runner = ExportRunner::new(SheetOptions::new("选品数据").columns(ProductRow::columns()));
 let stats = runner
     .export_xlsx("uploads/export/products.xlsx", |cursor| {
@@ -103,7 +103,7 @@ let stats = runner
             if let Some(last_id) = cursor {
                 q = q.filter(product::Column::Id.gt(last_id));
             }
-            let rows = q.all(&db).await.map_err(|e| excel::ExcelError::Sink(e.to_string()))?;
+            let rows = q.all(&db).await.map_err(|e| fast_excel::ExcelError::Sink(e.to_string()))?;
             let done = rows.len() < 1000;
             let last_id = rows.last().map(|r| r.id.clone());
             let rows = rows.into_iter().map(Into::into).collect();
@@ -132,7 +132,7 @@ let stats = runner
 **导出**：
 
 ```rust
-use excel::{CellImage, CellValue, SheetOptions, WriteOptions};
+use fast_excel::{CellImage, CellValue, SheetOptions, WriteOptions};
 
 let sheet = SheetOptions::new("带图数据")
     .columns(ProductRow::columns())
@@ -184,7 +184,7 @@ runner.export_multi_sheet("out.xlsx", sheet_options, |sheet_index, cursor| async
 ## 导入模板
 
 ```rust
-use excel::{build_template, ColumnDef, ReferenceSheet, TemplateSpec};
+use fast_excel::{build_template, ColumnDef, ReferenceSheet, TemplateSpec};
 
 let bytes = build_template(&TemplateSpec::new(ProductRow::columns())
     .sheet_name("产品导入")
@@ -217,7 +217,7 @@ let bytes = build_template(&TemplateSpec::new(ProductRow::columns())
 业务端既不用管理工厂，也不用写任何注册代码：
 
 ```rust
-use excel::{ExcelExecutor, ExcelRow, ZipSource};
+use fast_excel::{ExcelExecutor, ExcelRow, ZipSource};
 use serde::Serialize;
 
 #[derive(ExcelRow, ExcelExecutor, Serialize)]
@@ -228,19 +228,19 @@ struct ProductRow {
     // ...
 }
 
-# async fn demo(sink: std::sync::Arc<dyn excel::BatchSink<ProductRow>>) -> Result<(), excel::ExcelError> {
+# async fn demo(sink: std::sync::Arc<dyn fast_excel::BatchSink<ProductRow>>) -> Result<(), fast_excel::ExcelError> {
 let source = ZipSource::open("products.xlsx")?;
 
 // ① 按类型：编译期类型安全，一个入口覆盖全部
-let exec = excel::executor_for::<ProductRow>();
+let exec = fast_excel::executor_for::<ProductRow>();
 let preview = exec.preview(source.clone(), 200)?;        // 校验预览
 let report = exec.commit(source.clone(), sink).await?;   // 分批落库
 let bytes = exec.export_bytes(&[])?;                     // 导出到内存（HTTP 下载）
 exec.export_xlsx("out.xlsx", /* 游标分页闭包 */ |cursor| async move { todo!() }).await?;
 
 // ② 按注册名：字符串调度（Web 层按请求参数路由到不同模型）
-let json = excel::preview_by_name("product", source, 200)?;
-println!("已注册执行器：{:?}", excel::registered_names());
+let json = fast_excel::preview_by_name("product", source, 200)?;
+println!("已注册执行器：{:?}", fast_excel::registered_names());
 # Ok(()) }
 ```
 
@@ -258,8 +258,8 @@ println!("已注册执行器：{:?}", excel::registered_names());
 ## 测试
 
 ```bash
-cargo test -p excel                                                   # 单测 + 往返 + 文档测试
-cargo test -p excel --test roundtrip -- --ignored --nocapture         # 100 万行流式压力测试
+cargo test -p fast-excel                                                   # 单测 + 往返 + 文档测试
+cargo test -p fast-excel --test roundtrip -- --ignored --nocapture         # 100 万行流式压力测试
 ```
 
 `stress_one_million_rows_streaming` 会真实写出 100 万行 xlsx 再逐行读回，

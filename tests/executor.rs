@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use excel::{
+use fast_excel::{
     ExcelExecutor, ExcelReader, ExcelRow, Executor, NoopSink, SheetSelector, ZipSource,
     build_template, executor_by_name, executor_entry, executor_for, preview_by_name,
     registered_executors, registered_names,
@@ -116,7 +116,7 @@ fn test_export_and_template_via_executor() {
         .stream(
             SheetSelector::First,
             &Product::columns(),
-            excel::ReadOptions::new(),
+            fast_excel::ReadOptions::new(),
         )
         .unwrap();
     let mut count = 0;

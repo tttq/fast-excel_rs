@@ -18,7 +18,7 @@ use quick_xml::events::{BytesStart, Event};
 use crate::error::{ExcelError, Result};
 use crate::read::source::ZipSource;
 use crate::read::workbook::load_sheets;
-// 图片类型与单元格值共用一套定义（`excel::CellImage`），避免两处结构体互转
+// 图片类型与单元格值共用一套定义（`fast_excel::CellImage`），避免两处结构体互转
 pub use crate::value::CellImage;
 
 /// 两种存储方式的一次性提取结果

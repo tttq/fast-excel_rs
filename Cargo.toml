@@ -1,11 +1,15 @@
 [package]
-name = "excel"
+name = "fast-excel"
 version = "0.3.0"
 edition = "2021"
 rust-version = "1.81"
 description = "通用 Excel 导入导出工具：流式读写（百万级）、动态表头适配、多 sheet、单元格图片、批量落库（纯 Rust，对标 EasyExcel）"
 keywords = ["excel", "xlsx", "import", "export", "streaming"]
 categories = ["parser-implementations", "file-format"]
+license = "MIT"
+repository = "https://github.com/tttq/fast-excel_rs"
+readme = "README.md"
+documentation = "https://docs.rs/fast-excel"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -22,7 +26,7 @@ quick-xml = "0.37"
 rust_xlsxwriter = { version = "0.99", features = ["constant_memory"] }
 # flate2 保持本 crate 自包含（zip 解压 deflate）
 flate2 = "1"
-excel-macros = { path = "fast-excel-macros" }
+fast-excel-macros = { version = "0.1.0", path = "fast-excel-macros" }
 
 [dev-dependencies]
 base64 = "0.23"
