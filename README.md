@@ -20,6 +20,7 @@
 | 多 sheet | 多 `sheet()` 写        | 读：`SheetSelector::{Name,Names,All}`；写：`ExcelWriter::add_sheet`、`ExportRunner::export_multi_sheet` |
 | 导入模板    | 模板导出                 | `TemplateSpec` / `build_template`：必填红字 + 示例行 + 下拉 + 说明 sheet                                      |
 | 导入预览    | 校验后再入库               | `ImportRunner::preview`（只读前 N 行，返回列匹配与行级错误）                                                       |
+| 执行器注册   | 注册后全链路复用             | `#[derive(ExcelExecutor)]` + 全局注册表：预览 / 导入 / 导出 / 模板一条龙（按类型或按名字符串）                           |
 | 纯文本兜底   | —                    | `write_csv`（UTF-8 BOM，Excel 双击不乱码）                                                                |
 
 ## 快速开始
@@ -208,6 +209,45 @@ let bytes = build_template(&TemplateSpec::new(ProductRow::columns())
 
 `analyze_header` / `analyze_all_headers` 可只做预检，把「匹配到哪些列、缺哪些必填列、
 多出哪些列」返回给前端确认。
+
+## 执行器（推荐）：注册一次，全链路通用
+
+不想每次手拼 `ImportRunner` / `ExportRunner` 的，给行模型挂一个派生宏即可。
+宏自动创建执行器工厂并**静态注册进全局表**（`inventory` 链接期收集，零初始化），
+业务端既不用管理工厂，也不用写任何注册代码：
+
+```rust
+use excel::{ExcelExecutor, ExcelRow, ZipSource};
+use serde::Serialize;
+
+#[derive(ExcelRow, ExcelExecutor, Serialize)]
+#[excel(sheet = "产品导入", register = "product")]
+struct ProductRow {
+    #[excel(header = "品名", required)]
+    name: String,
+    // ...
+}
+
+# async fn demo(sink: std::sync::Arc<dyn excel::BatchSink<ProductRow>>) -> Result<(), excel::ExcelError> {
+let source = ZipSource::open("products.xlsx")?;
+
+// ① 按类型：编译期类型安全，一个入口覆盖全部
+let exec = excel::executor_for::<ProductRow>();
+let preview = exec.preview(source.clone(), 200)?;        // 校验预览
+let report = exec.commit(source.clone(), sink).await?;   // 分批落库
+let bytes = exec.export_bytes(&[])?;                     // 导出到内存（HTTP 下载）
+exec.export_xlsx("out.xlsx", /* 游标分页闭包 */ |cursor| async move { todo!() }).await?;
+
+// ② 按注册名：字符串调度（Web 层按请求参数路由到不同模型）
+let json = excel::preview_by_name("product", source, 200)?;
+println!("已注册执行器：{:?}", excel::registered_names());
+# Ok(()) }
+```
+
+- `register = "name"` 是全局注册名，**必填**；模型需实现 `Serialize`（按名预览返回 JSON）；
+- 需要微调默认行为时，用 `exec.import_runner()` / `exec.export_runner()` 拿到切好的 runner 再改；
+- 全部能力：`preview` / `preview_json` / `commit` / `for_each_row` / `export_bytes` /
+  `export_rows` / `export_sheets` / `export_xlsx` / `export_multi_sheet` / `template`。
 
 ## 错误与国际化
 

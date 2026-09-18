@@ -101,8 +101,12 @@ fn expand(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
             if meta.path.is_ident("sheet") {
                 sheet_name = Some(meta.value()?.parse::<LitStr>()?.value());
                 Ok(())
+            } else if meta.path.is_ident("register") {
+                // 由 ExcelExecutor 派生处理；ExcelRow 这里忽略即可（两者常组合使用）
+                meta.value()?.parse::<LitStr>()?;
+                Ok(())
             } else {
-                Err(meta.error("结构体上只支持 #[excel(sheet = \"...\")]"))
+                Err(meta.error("结构体上只支持 #[excel(sheet = \"...\", register = \"...\")]"))
             }
         })?;
     }
@@ -480,4 +484,116 @@ fn base_type_name(ty: &Type) -> Option<String> {
         Type::Reference(reference) => base_type_name(&reference.elem),
         _ => None,
     }
+}
+
+// ───────────────────────── 执行器注册派生宏 ─────────────────────────
+
+/// `#[derive(ExcelExecutor)]`：把行模型注册成「执行器工厂」
+///
+/// 在业务模型上（通常与 `#[derive(ExcelRow)]` 组合使用）挂一个注册名即可：
+///
+/// ```ignore
+/// use excel::{ExcelExecutor, ExcelRow};
+/// use serde::Serialize;
+///
+/// #[derive(ExcelRow, ExcelExecutor, Serialize)]
+/// #[excel(sheet = "产品导入", register = "product")]
+/// struct ProductRow {
+///     #[excel(header = "品名", required)]
+///     name: String,
+/// }
+///
+/// // 业务端零配置直接调用（自动创建 runner / 注册进全局表）：
+/// let exec = excel::executor_for::<ProductRow>();
+/// // 或按注册名字符串调度（Web 层路由用）：
+/// let erased = excel::executor_by_name("product");
+/// ```
+///
+/// 需要实现 `serde::Serialize`：注册进全局表后要能按名返回 JSON 预览。
+/// 属性（挂在 `#[excel(...)]` 上，可与 [`derive(ExcelRow)`](macro@ExcelRow) 的 `sheet` 同时写）：
+///
+/// | 属性 | 必填 | 说明 |
+/// |---|---|---|
+/// | `register = "name"` | 是 | 全局注册名（按名调度的 key） |
+/// | `sheet = "sheet"` | 否 | 默认工作表名（缺省退回 `ExcelRow::sheet_name`） |
+#[proc_macro_derive(ExcelExecutor, attributes(excel))]
+pub fn derive_excel_executor(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match expand_executor(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+fn expand_executor(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+    if !matches!(input.data, Data::Struct(_)) {
+        return Err(syn::Error::new_spanned(
+            input,
+            "ExcelExecutor 只能派生在结构体上",
+        ));
+    }
+    let ident = &input.ident;
+
+    let mut register: Option<LitStr> = None;
+    let mut _sheet: Option<String> = None;
+    for attr in &input.attrs {
+        if !attr.path().is_ident("excel") {
+            continue;
+        }
+        attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("register") {
+                register = Some(meta.value()?.parse::<LitStr>()?);
+                Ok(())
+            } else if meta.path.is_ident("sheet") {
+                _sheet = Some(meta.value()?.parse::<LitStr>()?.value());
+                Ok(())
+            } else {
+                Err(meta.error("ExcelExecutor 只支持 #[excel(register = \"...\", sheet = \"...\")]"))
+            }
+        })?;
+    }
+    let register = register.ok_or_else(|| {
+        syn::Error::new_spanned(
+            ident,
+            "ExcelExecutor 需要 #[excel(register = \"注册名\")]，例如 register = \"product\"",
+        )
+    })?;
+
+    // 全局唯一命名：同一模块里不可能出现两个同名类型
+    let make_fn = syn::Ident::new(
+        &format!("__excel_executor_make_{ident}"),
+        proc_macro2::Span::call_site(),
+    );
+
+    Ok(quote! {
+        #[automatically_derived]
+        impl ::excel::ExcelExecutor for #ident {
+            const EXECUTOR_NAME: &'static str = #register;
+        }
+
+        #[automatically_derived]
+        impl #ident {
+            /// 本模型的通用执行器：预览 / 导入 / 导出 / 模板一条龙，业务端无需手拼 runner
+            pub fn executor() -> ::excel::Executor<Self> {
+                ::excel::executor_for::<Self>()
+            }
+        }
+
+        #[doc(hidden)]
+        #[allow(non_snake_case)]
+        fn #make_fn() -> ::std::boxed::Box<dyn ::excel::ErasedExecutor> {
+            ::std::boxed::Box::new(::excel::executor_for::<#ident>())
+        }
+
+        #[allow(non_upper_case_globals, unused)]
+        const _: () = {
+            ::excel::inventory::submit! {
+                ::excel::ExecutorEntry {
+                    name: #register,
+                    type_name: ::core::stringify!(#ident),
+                    make: #make_fn,
+                }
+            }
+        };
+    })
 }
